@@ -1,7 +1,9 @@
 from typing import List, Dict
 import numpy as np
-from semantic_router import Route, RouteLayer
+from semantic_router.route import Route
 from semantic_router.encoders.tfidf import TfidfEncoder
+from sklearn.metrics.pairwise import cosine_similarity
+from shoppinggpt.logging_utils import get_logger
 
 PRODUCT_SAMPLE = [
     "how much does this dress cost", "what colors are available for this shirt",
@@ -24,7 +26,9 @@ PRODUCT_SAMPLE = [
     "do you have any sustainable fashion lines", "can you help me find a dress for a wedding",
     "what's the fabric composition of these socks", "do you have any UV protection clothing",
     "what's your most comfortable brand of shoes", "do you offer gift cards for your store",
-    "what's the warranty on your watches", "can you explain the different types of denim you offer"
+    "what's the warranty on your watches", "can you explain the different types of denim you offer",
+    "áo này giá bao nhiêu", "chiếc váy này có màu gì", "bạn có bán áo khoác không",
+    "thời tiết hôm nay thế nào", "bạn thích món ăn nào", "hãy kể một câu chuyện cười"
 ]
 
 CHITCHAT_SAMPLE = [
@@ -48,7 +52,9 @@ CHITCHAT_SAMPLE = [
     "what's your go-to karaoke song", "do you believe in love at first sight",
     "what's your favorite way to relax", "if you could have dinner with anyone, who would it be",
     "what's your favorite ice cream flavor", "do you have any hidden talents",
-    "what's your favorite quote", "if you won the lottery, what's the first thing you'd buy"
+    "what's your favorite quote", "if you won the lottery, what's the first thing you'd buy",
+    "hôm nay bạn thế nào", "bạn có thích phim không", "thời tiết hôm nay đẹp quá",
+    "kể cho tôi một câu chuyện cười", "bạn thích món ăn gì", "bạn có thú cưng không"
 ]
 
 # Constants
@@ -74,16 +80,29 @@ class SemanticRouter:
         # Now fit the TfidfEncoder with the routes
         self.embedding.fit(self.routes)
 
-        self.route_layer = RouteLayer(encoder=self.embedding, routes=self.routes)
-
     def similarity(self, query: str, route: Route) -> float:
         # Calculate similarity between query and route
         # Using the transform method instead of encode
-        query_embedding = self.embedding.transform([query])[0]
-        route_embedding = self.embedding.transform(route.utterances)
-        return np.mean(np.dot(query_embedding, route_embedding.T))
+        query_embedding = self.embedding.__call__([query])[0]
+        route_embeddings = np.array([self.embedding.__call__([utterance])[0] for utterance in route.utterances])
+        similarities = []
+
+        for emb in route_embeddings:
+            sim = cosine_similarity(
+                query_embedding.embedding,
+                emb.embedding
+            )[0][0]
+
+            similarities.append(sim)
+
+        return float(np.mean(similarities))
 
     def guide(self, query: str) -> str:
-        # Use the route_layer to determine the best route
-        best_route = self.route_layer(query)
-        return best_route.name if best_route else CHITCHAT_ROUTE_NAME
+        scores = {
+            self.product_route.name: self.similarity(query, self.product_route),
+            self.chitchat_route.name: self.similarity(query, self.chitchat_route),
+        }
+        route = self.product_route.name if scores[self.product_route.name] >= scores[self.chitchat_route.name] else self.chitchat_route.name
+        logger.info("Routing decision=%s scores=%s", route, scores)
+        return route
+logger = get_logger(__name__)

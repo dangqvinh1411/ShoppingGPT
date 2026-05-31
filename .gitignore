@@ -4,3 +4,5 @@ models/opendaisy/
 *.bin
 *.pt
 *.pth
+
+venv/

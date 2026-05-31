@@ -168,7 +168,7 @@ If you encounter any issues:
 2. Check the console for any error messages.
 3. Verify that the database and policy files are in the correct locations.
 4. Make sure all required dependencies are installed correctly.
-5. Confirm that you're using a compatible Python version (3.7+).
+5. Confirm that you're using a compatible Python version (3.12).
 
 For more detailed information, please refer to the documentation or open an issue on the GitHub repository.
 

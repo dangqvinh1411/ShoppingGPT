@@ -4,8 +4,12 @@ from typing import List
 from langchain.tools import tool
 from langchain_community.vectorstores import FAISS
 from langchain_community.document_loaders import TextLoader
-from langchain.text_splitter import RecursiveCharacterTextSplitter
+from langchain_classic.text_splitter import RecursiveCharacterTextSplitter
 from shoppinggpt.config import EMBEDDINGS, DATA_TEXT_PATH, STORE_DIRECTORY
+from shoppinggpt.logging_utils import get_logger
+
+
+logger = get_logger(__name__)
 
 class VectorStoreManager:
     def __init__(self, data_path: str, store_directory: str, embeddings):
@@ -59,6 +63,7 @@ def policy_search_tool(query: str) -> List[str]:
     Returns:
         List[str]: The search results as a list of text strings.
     """
+    logger.info("Policy search started")
     vector_store_manager = VectorStoreManager.create(
         DATA_TEXT_PATH,
         STORE_DIRECTORY,
@@ -66,4 +71,5 @@ def policy_search_tool(query: str) -> List[str]:
     )
 
     results = vector_store_manager.vectorstore.similarity_search(query, k=5)
+    logger.info("Policy search completed with rows=%s", len(results))
     return [doc.page_content for doc in results]

@@ -1970,6 +1970,7 @@
     const PERSON_IMG = "https://openclipart.org/download/247316/abstract-user-flat-2.svg";
     const BOT_NAME = "MetagentBot";
     const PERSON_NAME = "You";
+    let streamMessageCount = 0;
 
     msgerForm.addEventListener("submit", event => {
       event.preventDefault();
@@ -2004,19 +2005,49 @@
     }
 
     function botResponse(rawText) {
-      // Bot Response
-      $.get("/get", { msg: rawText }).done(function (data) {
-        console.log(rawText);
-        console.log(data);
+      const messageId = `streaming-bot-message-${++streamMessageCount}`;
+      const msgHTML = `
+        <div class="msg left-msg">
+          <div class="msg-img" style="background-image: url(${BOT_IMG})"></div>
+          <div class="msg-bubble">
+            <div class="msg-info">
+              <div class="msg-info-name">${BOT_NAME}</div>
+              <div class="msg-info-time">${formatDate(new Date())}</div>
+            </div>
+            <div class="msg-text" id="${messageId}"></div>
+          </div>
+        </div>
+      `;
 
-        if (data && data.response) {
-          const formattedText = data.response.replace(/\n/g, '<br>'); // Replace newline characters with <br> tags
-          appendMessage(BOT_NAME, BOT_IMG, "left", formattedText);
-        } else {
-          appendMessage(BOT_NAME, BOT_IMG, "left", "Sorry, I couldn't process your request.");
+      msgerChat.insertAdjacentHTML("beforeend", msgHTML);
+      msgerChat.scrollTop += 500;
+
+      const target = document.getElementById(messageId);
+      const source = new EventSource(`/stream?msg=${encodeURIComponent(rawText)}`);
+      let buffer = "";
+
+      source.addEventListener("status", function (event) {
+        const payload = JSON.parse(event.data);
+        target.innerHTML = `<em>${payload.message}</em>`;
+      });
+
+      source.addEventListener("delta", function (event) {
+        const payload = JSON.parse(event.data);
+        buffer += payload.text;
+        target.innerHTML = buffer.replace(/\n/g, '<br>');
+        msgerChat.scrollTop += 500;
+      });
+
+      source.addEventListener("done", function () {
+        source.close();
+        target.innerHTML = buffer.replace(/\n/g, '<br>');
+      });
+
+      source.addEventListener("error", function () {
+        source.close();
+        if (!buffer) {
+          target.innerHTML = "Sorry, there was an error processing your request.";
         }
-      }).fail(function() {
-        appendMessage(BOT_NAME, BOT_IMG, "left", "Sorry, there was an error processing your request.");
       });
     }
 

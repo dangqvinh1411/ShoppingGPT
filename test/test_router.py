@@ -1,6 +1,6 @@
 from typing import List, Dict
 import numpy as np
-from semantic_router import Route, RouteLayer
+from semantic_router import Route
 from semantic_router.encoders.tfidf import TfidfEncoder
 from shoppinggpt.router.samples_for_consine_algo import PRODUCT_SAMPLE, CHITCHAT_SAMPLE
 
@@ -29,11 +29,17 @@ class SemanticRouter:
         # Now fit the TfidfEncoder with the routes
         self.embedding.fit(self.routes)
 
-        self.route_layer = RouteLayer(encoder=self.embedding, routes=self.routes)
+    def similarity(self, query: str, route: Route) -> float:
+        query_embedding = self.embedding.transform([query])[0]
+        route_embedding = self.embedding.transform(route.utterances)
+        return np.mean(np.dot(query_embedding, route_embedding.T))
 
     def guide(self, query: str) -> str:
-        result = self.route_layer(query)
-        return result.name if result else "unknown"
+        scores = {
+            self.product_route.name: self.similarity(query, self.product_route),
+            self.chitchat_route.name: self.similarity(query, self.chitchat_route),
+        }
+        return max(scores, key=scores.get)
 
 def main():
     # Create an instance of SemanticRouter

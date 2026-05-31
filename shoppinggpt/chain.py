@@ -1,5 +1,5 @@
-from langchain.prompts import PromptTemplate
-from langchain.memory import ConversationBufferMemory
+from langchain_classic.prompts import PromptTemplate
+from langchain_classic.memory import ConversationBufferMemory
 from langchain_core.runnables import RunnablePassthrough
 
 def create_chitchat_chain(llm, shared_memory: ConversationBufferMemory):

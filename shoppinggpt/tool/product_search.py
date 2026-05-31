@@ -1,16 +1,20 @@
 import sqlite3
+import logging
 from typing import Union, List, Dict
 
-from langchain.prompts import PromptTemplate
+from langchain_classic.prompts import PromptTemplate
 from langchain_core.runnables import RunnablePassthrough
 from langchain.tools import tool
 from langchain_google_genai import ChatGoogleGenerativeAI
 
 from shoppinggpt.config import GOOGLE_API_KEY, DATA_PRODUCT_PATH
+from shoppinggpt.logging_utils import get_logger
 
 PRODUCT_RECOMMENDATION_PROMPT = """
     You are a chatbot assistant specializing in providing product information and
     recommendations using SQL queries.
+    The user may ask in Vietnamese or English. Understand the meaning of Vietnamese
+    queries and generate the correct SQL for the intent, even if the input is not English.
     Your primary tasks are:
 
     Provide detailed information about a specific product based on user queries.
@@ -60,17 +64,21 @@ class ProductDataLoader:
             self.conn.close()
 
     @staticmethod
-    def clean_sql_query(query: str) -> str:
-        return query.replace('```sql', '').replace('```', '').strip()
+    def clean_sql_query(query: any) -> str:
+        return query[-1]["text"].replace('```sql', '').replace('```', '').strip() if isinstance(query, list) else query
 
-    def execute_query(self, query: str, params: tuple = ()) -> List[Dict]:
+    def execute_query(self, query: any, params: tuple = ()) -> List[Dict]:
         if not self.conn:
             self.connect()
+        assert self.conn is not None
         cursor = self.conn.cursor()
         cleaned_query = self.clean_sql_query(query)
+        logger.info("Cleaned SQL query: %s", cleaned_query)
         cursor.execute(cleaned_query, params)
         columns = [col[0] for col in cursor.description]
-        return [dict(zip(columns, row)) for row in cursor.fetchall()]
+        results = [dict(zip(columns, row)) for row in cursor.fetchall()]
+        logger.info("Query results: %s", results)
+        return results
 
 @tool
 def product_search_tool(input: str) -> Union[List[Dict], str]:
@@ -84,14 +92,15 @@ def product_search_tool(input: str) -> Union[List[Dict], str]:
         Union[List[Dict], str]: Kết quả tìm kiếm dưới dạng danh sách từ điển hoặc thông báo lỗi nếu có.
     """
     try:
-        llm = ChatGoogleGenerativeAI(temperature=0, model="gemini-1.5-flash", google_api_key=GOOGLE_API_KEY)
+        logger.info("Product search started")
+        llm = ChatGoogleGenerativeAI(temperature=0, model="gemini-3.1-flash-lite", google_api_key=GOOGLE_API_KEY)
         prompt = PromptTemplate(
             template=PRODUCT_RECOMMENDATION_PROMPT,
             input_variables=["input"]
         )
-        
+        logger.info(f"{DATA_PRODUCT_PATH} will be used for product search")
         with ProductDataLoader(f"{DATA_PRODUCT_PATH}") as product_data_loader:
-            def execute_sql_query(query: str) -> List[Dict]:
+            def execute_sql_query(query: any) -> List[Dict]:
                 return product_data_loader.execute_query(query)
             
             chain = (
@@ -101,8 +110,10 @@ def product_search_tool(input: str) -> Union[List[Dict], str]:
                 | (lambda x: execute_sql_query(x.content))
             )
             result = chain.invoke(input)
-        
+        logger.info("Product search completed with rows=%s", len(result) if isinstance(result, list) else 0)
         return result
     except Exception as e:
+        logger.exception("Product search failed")
         return f"An error occurred: {str(e)}"
 
+logger = get_logger(__name__)
